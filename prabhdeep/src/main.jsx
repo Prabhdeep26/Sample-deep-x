@@ -10,6 +10,8 @@ import Error from "./pages/Error.jsx";
 import Help from "./pages/Help.jsx";
 import SignIn from "./pages/SignIn.jsx";
 import SignUp from "./pages/SignUp.jsx";
+import { Provider } from "react-redux";
+import store from "./redux/store.jsx";
 
 const appRouter = createBrowserRouter([
 	{
@@ -46,19 +48,21 @@ const appRouter = createBrowserRouter([
 
 createRoot(document.getElementById("root")).render(
 	<StrictMode>
-		<RouterProvider router={appRouter} />
-		<ToastContainer
-			position="top-right"
-			autoClose={3000}
-			hideProgressBar={false}
-			newestOnTop={false}
-			closeOnClick={false}
-			rtl={false}
-			pauseOnFocusLoss
-			draggable
-			pauseOnHover
-			theme="colored"
-			transition={Bounce}
-		/>
+		<Provider store={store}>
+			<RouterProvider router={appRouter} />
+			<ToastContainer
+				position="top-right"
+				autoClose={3000}
+				hideProgressBar={false}
+				newestOnTop={false}
+				closeOnClick={false}
+				rtl={false}
+				pauseOnFocusLoss
+				draggable
+				pauseOnHover
+				theme="colored"
+				transition={Bounce}
+			/>
+		</Provider>
 	</StrictMode>,
 );

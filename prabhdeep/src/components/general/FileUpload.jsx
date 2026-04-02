@@ -1,16 +1,21 @@
 import React, { useRef, useState } from "react";
+import { useDispatch } from "react-redux";
+import { addFiles, deleteFile } from "../../redux/filesSlice";
 
 const FileUpload = () => {
 	const fileInputRef = useRef(null);
 	const [selectedFiles, setSelectedFiles] = useState([]);
+	const dispatch = useDispatch();
 
 	const handleFileSelect = (files) => {
 		const newFiles = Array.from(files);
 		setSelectedFiles((prev) => [...prev, ...newFiles]);
+		dispatch(addFiles(newFiles));
 	};
 
 	const removeFile = (index) => {
 		setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+		dispatch(deleteFile(index));
 	};
 
 	return (
@@ -42,11 +47,11 @@ const FileUpload = () => {
 					<p className="text-gray-600 text-sm">
 						<span className="text-indigo-600 font-bold hover:underline">
 							Click here
-						</span>{" "}
+						</span>
 						to upload your file or drag.
 					</p>
 					<p className="text-gray-400 text-xs">
-						Supported Format: SVG, JPG, PNG (10mb each)
+						Supported Format: .pdf,.docx,.xlsx,.md (15mb)
 					</p>
 				</div>
 			</div>
