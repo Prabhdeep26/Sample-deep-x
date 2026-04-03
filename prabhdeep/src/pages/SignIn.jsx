@@ -28,7 +28,7 @@ const SignIn = () => {
 			);
 			return;
 		}
-		navigator("/");
+		navigator("/otp");
 	};
 
 	return (

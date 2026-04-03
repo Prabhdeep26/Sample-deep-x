@@ -43,7 +43,7 @@ const SignUp = () => {
 			toast.error("Password not match");
 			return;
 		}
-		navigator("/");
+		navigator("/otp");
 	};
 	
 	return (

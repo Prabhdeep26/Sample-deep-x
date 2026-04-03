@@ -3,7 +3,11 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.jsx";
 import { Bounce, ToastContainer } from "react-toastify";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import {
+	createBrowserRouter,
+	RouterProvider,
+	Navigate,
+} from "react-router-dom";
 import Home from "./pages/Home.jsx";
 import Settings from "./pages/Settings.jsx";
 import Error from "./pages/Error.jsx";
@@ -13,6 +17,10 @@ import SignUp from "./pages/SignUp.jsx";
 import { Provider } from "react-redux";
 import store from "./redux/store.jsx";
 import Forget from "./components/security/Forget.jsx";
+import Otp from "./components/security/Otp.jsx";
+import ProtectedRoute from "./components/security/ProtectedRoute.jsx";
+import ChangePass from "./components/security/ChangePass.jsx";
+import DeleteAccount from "./components/security/DeleteAccount.jsx";
 
 const appRouter = createBrowserRouter([
 	{
@@ -24,12 +32,21 @@ const appRouter = createBrowserRouter([
 		element: <SignUp />,
 	},
 	{
+		path: "/otp",
+		element: <Otp />,
+	},
+	{
 		path: "/forget-password",
 		element: <Forget />,
 	},
 	{
+		// 🚨 UPDATE THIS ROUTE 🚨
 		path: "/",
-		element: <App />,
+		element: (
+			<ProtectedRoute>
+				<App />
+			</ProtectedRoute>
+		),
 		children: [
 			{
 				path: "/",
@@ -46,6 +63,14 @@ const appRouter = createBrowserRouter([
 			{
 				path: "*",
 				element: <Error />,
+			},
+			{
+				path: "/change-password",
+				element: <ChangePass />,
+			},
+			{
+				path: "/delete-account",
+				element: <DeleteAccount />,
 			},
 		],
 	},
