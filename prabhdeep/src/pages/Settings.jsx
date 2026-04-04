@@ -46,7 +46,7 @@ const Settings = () => {
 						</Link>
 
 						{/* Two-Factor Authentication (Dummy placeholder for looks) */}
-						<div className="flex items-center justify-between p-4 sm:p-5 hover:bg-gray-50 transition-colors cursor-pointer">
+						<div className="items-center justify-between p-4 sm:p-5 hover:bg-gray-50 transition-colors cursor-pointer hidden">
 							<div className="flex items-center gap-4">
 								<div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center shrink-0">
 									<i className="ri-shield-check-line text-xl sm:text-2xl"></i>
