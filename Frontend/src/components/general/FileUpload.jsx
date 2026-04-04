@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
-import axios from "axios";
 import { toast } from "react-toastify";
+import { DocumentUpload } from "../../Api's/api's_Config/api.document.config";
 
 const FileUpload = () => {
     const mainFileInputRef = useRef(null);
@@ -9,11 +9,13 @@ const FileUpload = () => {
     const [documentGroups, setDocumentGroups] = useState([]);
     const [activeDocId, setActiveDocId] = useState(null);
     const [sector, setSector] = useState("legal");
+    
     const [isUploading, setIsUploading] = useState(false);
+    // ─── NEW: State for tracking upload percentage ───
+    const [uploadProgress, setUploadProgress] = useState(0);
 
-    const MAX_TOTAL_SIZE = 15 * 1024 * 1024; // 15MB
+    const MAX_TOTAL_SIZE = 15 * 1024 * 1024;
 
-    // Helper: Calculate the combined size of all currently selected files
     const calculateTotalSize = () => {
         return documentGroups.reduce((total, group) => {
             const mainSize = group.mainFile.size;
@@ -22,7 +24,6 @@ const FileUpload = () => {
         }, 0);
     };
 
-    // Updated Validation Logic
     const getValidFiles = (files, currentTotal) => {
         const allowedExtensions = [".pdf", ".docx", ".txt"];
         let runningTotal = currentTotal;
@@ -38,31 +39,25 @@ const FileUpload = () => {
                 return false;
             }
 
-            // Check if adding THIS file exceeds the combined 15MB limit
             if (runningTotal + file.size > MAX_TOTAL_SIZE) {
                 toast.error(`Skipped: "${file.name}". Combined total cannot exceed 15MB.`);
                 return false;
             }
 
-            runningTotal += file.size; // Update running total for the next file in the loop
+            runningTotal += file.size;
             return true;
         });
     };
 
-    // --- MAIN FILE HANDLERS ---
     const handleMainFileSelect = (files) => {
         if (!files) return;
-        
-        // Pass the current total size to the validator
         const currentTotal = calculateTotalSize();
         const validFiles = getValidFiles(files, currentTotal);
-
         const newGroups = validFiles.map((file) => ({
             id: Math.random().toString(36).substr(2, 9),
             mainFile: file,
             supportFiles: [],
         }));
-
         setDocumentGroups((prev) => [...prev, ...newGroups]);
     };
 
@@ -70,7 +65,6 @@ const FileUpload = () => {
         setDocumentGroups((prev) => prev.filter((doc) => doc.id !== id));
     };
 
-    // --- SUPPORT FILE HANDLERS ---
     const triggerSupportUpload = (id) => {
         setActiveDocId(id);
         supportFileInputRef.current.click();
@@ -78,7 +72,6 @@ const FileUpload = () => {
 
     const handleSupportFileSelect = (files) => {
         if (!files || !activeDocId) return;
-
         const targetGroup = documentGroups.find((doc) => doc.id === activeDocId);
         if (!targetGroup) return;
 
@@ -91,10 +84,8 @@ const FileUpload = () => {
             return;
         }
 
-        // Pass the current total size to the validator
         const currentTotal = calculateTotalSize();
         const validFiles = getValidFiles(files, currentTotal);
-        
         let filesToAdd = validFiles;
 
         if (validFiles.length > remainingSlots) {
@@ -105,10 +96,7 @@ const FileUpload = () => {
         setDocumentGroups((prev) =>
             prev.map((doc) => {
                 if (doc.id === activeDocId) {
-                    return {
-                        ...doc,
-                        supportFiles: [...doc.supportFiles, ...filesToAdd],
-                    };
+                    return { ...doc, supportFiles: [...doc.supportFiles, ...filesToAdd] };
                 }
                 return doc;
             }),
@@ -120,9 +108,7 @@ const FileUpload = () => {
         setDocumentGroups((prev) =>
             prev.map((doc) => {
                 if (doc.id === docId) {
-                    const updatedSupport = doc.supportFiles.filter(
-                        (_, i) => i !== supportFileIndex,
-                    );
+                    const updatedSupport = doc.supportFiles.filter((_, i) => i !== supportFileIndex);
                     return { ...doc, supportFiles: updatedSupport };
                 }
                 return doc;
@@ -130,7 +116,7 @@ const FileUpload = () => {
         );
     };
 
-    // --- SUBMISSION ---
+    // ─── SUBMISSION ──────────────────────────────────────────────
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -140,25 +126,40 @@ const FileUpload = () => {
         }
 
         setIsUploading(true);
-        const uploadToastId = toast.loading("Uploading documents...");
+        setUploadProgress(0); // Reset progress on new upload
+        const uploadToastId = toast.loading("Preparing upload...");
 
         const formData = new FormData();
-        formData.append("documentCategory", sector);
+        
+        formData.append("sector", sector);
 
-        documentGroups.forEach((group, index) => {
-            formData.append("mainFiles", group.mainFile);
+        documentGroups.forEach((group) => {
+            formData.append("files", group.mainFile);
+            
             group.supportFiles.forEach((supportFile) => {
-                formData.append(`supportFiles_${index}`, supportFile);
+                formData.append("files", supportFile);
             });
         });
 
-        try {
-            const response = await axios.post(
-                "https://unstagnant-elida-heartrendingly.ngrok-free.dev/api/v2/document-upload",
-                formData,
-            );
+        // ─── NEW: Axios Progress Configuration ───
+        const config = {
+            onUploadProgress: (progressEvent) => {
+                // Calculate percentage
+                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                setUploadProgress(percentCompleted);
+                
+                // Update toast message dynamically
+                toast.update(uploadToastId, {
+                    render: `Uploading... ${percentCompleted}%`,
+                });
+            }
+        };
 
-            console.log("Upload successful:", response.data);
+        try {
+            // Pass the config alongside your formData!
+            const response = await DocumentUpload(formData, config);
+
+            console.log("Upload successful:", response);
             setDocumentGroups([]);
 
             toast.update(uploadToastId, {
@@ -167,20 +168,26 @@ const FileUpload = () => {
                 isLoading: false,
                 autoClose: 3000,
             });
+
         } catch (error) {
-            console.error("Upload failed:", error.response?.data || error.message);
+            console.error("Upload failed:", error);
+            const errorMsg = error.response?.data?.message || "Failed to upload documents.";
+            
             toast.update(uploadToastId, {
-                render: "Failed to upload documents. Please try again.",
+                render: errorMsg,
                 type: "error",
                 isLoading: false,
                 autoClose: 4000,
             });
         } finally {
             setIsUploading(false);
+            // Optionally, you can keep the progress bar at 100% for a moment, 
+            // but setting it back to 0 cleans up the UI.
+            setTimeout(() => setUploadProgress(0), 1000); 
         }
     };
+    // ─────────────────────────────────────────────────────────────
 
-    // Calculate dynamic UI values
     const currentTotalSizeMB = (calculateTotalSize() / (1024 * 1024)).toFixed(1);
     const sizePercentage = Math.min((calculateTotalSize() / MAX_TOTAL_SIZE) * 100, 100);
 
@@ -202,18 +209,15 @@ const FileUpload = () => {
                 accept=".pdf, .docx, .txt, image/*"
             />
 
-            {/* COLUMN 1: File Upload Areas */}
             <div className="space-y-6">
                 <div className="space-y-4">
                     <div className="flex justify-between items-end">
                         <h2 className="text-lg font-semibold text-gray-800">
                             1. Select Primary Documents
                         </h2>
-                        
-                        {/* Current Total Size Indicator */}
                         <div className="text-right">
                             <p className="text-xs font-semibold text-gray-500 mb-1">TOTAL SIZE</p>
-                            <p className={`text-sm font-bold ${sizePercentage > 90 ? 'text-red-500' : 'text-indigo-600'}`}>
+                            <p className={`text-sm font-bold ${sizePercentage > 90 ? "text-red-500" : "text-indigo-600"}`}>
                                 {currentTotalSizeMB} <span className="text-gray-400 font-medium">/ 15 MB</span>
                             </p>
                         </div>
@@ -222,10 +226,7 @@ const FileUpload = () => {
                     <div
                         onClick={() => mainFileInputRef.current.click()}
                         onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                            e.preventDefault();
-                            handleMainFileSelect(e.dataTransfer.files);
-                        }}
+                        onDrop={(e) => { e.preventDefault(); handleMainFileSelect(e.dataTransfer.files); }}
                         className={`group flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-2xl transition-all cursor-pointer px-4 text-center ${isUploading || sizePercentage >= 100 ? "opacity-50 pointer-events-none" : "border-indigo-400 bg-white hover:bg-indigo-50/50"}`}
                     >
                         <input
@@ -241,14 +242,10 @@ const FileUpload = () => {
                                 <i className="ri-upload-cloud-2-line text-indigo-500 text-xl"></i>
                             </div>
                             <p className="text-gray-600 text-sm">
-                                <span className="text-indigo-600 font-bold group-hover:underline">
-                                    Click here
-                                </span>{" "}
+                                <span className="text-indigo-600 font-bold group-hover:underline">Click here</span>{" "}
                                 to upload primary files.
                             </p>
-                            <p className="text-gray-400 text-xs">
-                                Max 15MB combined total
-                            </p>
+                            <p className="text-gray-400 text-xs">Max 15MB combined total</p>
                         </div>
                     </div>
 
@@ -260,30 +257,20 @@ const FileUpload = () => {
                                         <div className="flex items-center gap-3 min-w-0 flex-1">
                                             <i className="ri-file-text-fill text-2xl text-indigo-500 shrink-0"></i>
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-sm font-semibold text-gray-800 truncate">
-                                                    {group.mainFile.name}
-                                                </p>
-                                                <p className="text-xs text-gray-400">
-                                                    {(group.mainFile.size / 1024 / 1024).toFixed(1)} MB
-                                                </p>
+                                                <p className="text-sm font-semibold text-gray-800 truncate">{group.mainFile.name}</p>
+                                                <p className="text-xs text-gray-400">{(group.mainFile.size / 1024 / 1024).toFixed(1)} MB</p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
                                             <button
                                                 type="button"
                                                 onClick={() => triggerSupportUpload(group.id)}
-                                                // Disable button if uploading, max files reached, or max total size reached
                                                 disabled={isUploading || group.supportFiles.length >= 5 || sizePercentage >= 100}
-                                                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${
-                                                    group.supportFiles.length >= 5 || sizePercentage >= 100
-                                                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                                        : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-                                                }`}
+                                                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${group.supportFiles.length >= 5 || sizePercentage >= 100 ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"}`}
                                             >
                                                 <i className="ri-attachment-line"></i>{" "}
                                                 {group.supportFiles.length >= 5 ? "Max 5 Attached" : "Attach Support"}
                                             </button>
-
                                             <button
                                                 type="button"
                                                 onClick={() => removeMainDocument(group.id)}
@@ -298,24 +285,16 @@ const FileUpload = () => {
                                     {group.supportFiles.length > 0 && (
                                         <div className="mt-3 ml-4 pl-4 border-l-2 border-indigo-100 space-y-2">
                                             <div className="flex justify-between items-center mb-1">
-                                                <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                                                    Validating Documents
-                                                </p>
-                                                <p className="text-[10px] font-medium text-gray-400">
-                                                    {group.supportFiles.length} / 5
-                                                </p>
+                                                <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Validating Documents</p>
+                                                <p className="text-[10px] font-medium text-gray-400">{group.supportFiles.length} / 5</p>
                                             </div>
                                             {group.supportFiles.map((supportFile, sIndex) => (
                                                 <div key={sIndex} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-gray-100">
                                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                                         <i className="ri-shield-check-line text-emerald-500 text-lg shrink-0"></i>
                                                         <div className="min-w-0 flex-1">
-                                                            <p className="text-xs font-medium text-gray-600 truncate">
-                                                                {supportFile.name}
-                                                            </p>
-                                                            <p className="text-[10px] text-gray-400">
-                                                                {(supportFile.size / 1024 / 1024).toFixed(1)} MB
-                                                            </p>
+                                                            <p className="text-xs font-medium text-gray-600 truncate">{supportFile.name}</p>
+                                                            <p className="text-[10px] text-gray-400">{(supportFile.size / 1024 / 1024).toFixed(1)} MB</p>
                                                         </div>
                                                     </div>
                                                     <button
@@ -337,40 +316,19 @@ const FileUpload = () => {
                 </div>
             </div>
 
-            {/* COLUMN 2: Document Settings & Submission */}
             <div className="space-y-6 bg-gray-50 p-6 rounded-3xl border border-gray-100 sticky top-4">
                 <div>
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                        2. Document Category
-                    </h2>
-
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4">2. Document Category</h2>
                     <div className="flex flex-col gap-3">
                         <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all ${sector === "legal" ? "border-indigo-500 bg-indigo-50/50" : "border-gray-200 bg-white hover:bg-gray-50"} ${isUploading ? "opacity-50 cursor-not-allowed" : ""}`}>
-                            <input
-                                type="radio"
-                                name="sector"
-                                value="legal"
-                                checked={sector === "legal"}
-                                onChange={(e) => setSector(e.target.value)}
-                                disabled={isUploading}
-                                className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                            />
+                            <input type="radio" name="sector" value="legal" checked={sector === "legal"} onChange={(e) => setSector(e.target.value)} disabled={isUploading} className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" />
                             <div className="ml-3">
                                 <span className="block text-sm font-medium text-gray-900">Legal Documents</span>
                                 <span className="block text-xs text-gray-500">Contracts, NDAs, compliance forms.</span>
                             </div>
                         </label>
-
                         <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all ${sector === "financial" ? "border-indigo-500 bg-indigo-50/50" : "border-gray-200 bg-white hover:bg-gray-50"} ${isUploading ? "opacity-50 cursor-not-allowed" : ""}`}>
-                            <input
-                                type="radio"
-                                name="sector"
-                                value="financial"
-                                checked={sector === "financial"}
-                                onChange={(e) => setSector(e.target.value)}
-                                disabled={isUploading}
-                                className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                            />
+                            <input type="radio" name="sector" value="financial" checked={sector === "financial"} onChange={(e) => setSector(e.target.value)} disabled={isUploading} className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" />
                             <div className="ml-3">
                                 <span className="block text-sm font-medium text-gray-900">Financial Documents</span>
                                 <span className="block text-xs text-gray-500">Invoices, tax returns, balance sheets.</span>
@@ -381,19 +339,35 @@ const FileUpload = () => {
 
                 <hr className="border-gray-200" />
 
-                <button
-                    type="submit"
-                    disabled={documentGroups.length === 0 || isUploading}
-                    className="w-full bg-indigo-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex justify-center items-center gap-2"
-                >
-                    {isUploading ? (
-                        <>
-                            <i className="ri-loader-4-line animate-spin"></i> Uploading...
-                        </>
-                    ) : (
-                        "Upload to Server"
+                <div className="flex flex-col gap-3">
+                    <button
+                        type="submit"
+                        disabled={documentGroups.length === 0 || isUploading}
+                        className="w-full bg-indigo-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex justify-center items-center gap-2"
+                    >
+                        {isUploading ? (
+                            <><i className="ri-loader-4-line animate-spin"></i> Uploading...</>
+                        ) : (
+                            "Upload to Server"
+                        )}
+                    </button>
+
+                    {/* ─── NEW: Visual Progress Bar ─── */}
+                    {isUploading && (
+                        <div className="w-full mt-2 animate-pulse">
+                            <div className="flex justify-between text-xs font-semibold text-gray-600 mb-1 px-1">
+                                <span>Transferring data...</span>
+                                <span>{uploadProgress}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden border border-gray-300">
+                                <div 
+                                    className="bg-indigo-600 h-2.5 rounded-full transition-all ease-out duration-300" 
+                                    style={{ width: `${uploadProgress}%` }}
+                                ></div>
+                            </div>
+                        </div>
                     )}
-                </button>
+                </div>
             </div>
         </form>
     );

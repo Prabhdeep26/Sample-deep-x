@@ -1,0 +1,27 @@
+{
+  "name": "sample-deep-x",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/Prabhdeep26/Sample-deep-x#readme",
+  "bugs": {
+    "url": "https://github.com/Prabhdeep26/Sample-deep-x/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Prabhdeep26/Sample-deep-x.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "backend": "cd Backend && npm run dev",
+    "frontend": "cd Frontend && npm run dev",
+      "dev": "concurrently \"npm run backend\" \"npm run frontend\""
+  },
+  "dependencies": {
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.14"
+  }
+}
